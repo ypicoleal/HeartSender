@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Heart Sender</string>
+    <string name="action_settings">Settings</string>
+    <string name="ble_not_supported">BLE not supported</string>
+    <string name="ble_aviable">BLE aviable</string>
+    <string name="beat">0ppm</string>
+</resources>

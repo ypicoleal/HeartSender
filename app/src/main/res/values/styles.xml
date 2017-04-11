@@ -1,0 +1,39 @@
+<resources>
+
+    <!-- Base application theme. -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- Customize your theme here. -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
+        <item name="colorAccent">@color/colorAccent</item>
+    </style>
+
+    <style name="AppTheme.NoActionBar">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+    </style>
+
+    <style name="AppTheme.AppBarOverlay" parent="ThemeOverlay.AppCompat.Dark.ActionBar" />
+
+    <style name="AppTheme.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />
+
+    <style name="APDefacto.Light">
+        <item name="android:background">@color/ap_white</item>
+        <item name="backgroundColor">@color/ap_white</item>
+        <item name="graphBackgroundColor">@color/ap_white</item>
+        <item name="gridBackgroundColor">@color/ap_white</item>
+        <item name="domainLineColor">@color/ap_gray</item>
+        <item name="rangeLineColor">@color/ap_gray</item>
+        <item name="lineLabelTextColorTop">@color/ap_charcoal</item>
+        <item name="lineLabelTextColorBottom">@color/ap_charcoal</item>
+        <item name="lineLabelTextColorLeft">@color/ap_charcoal</item>
+        <item name="lineLabelTextColorRight">@color/ap_charcoal</item>
+        <item name="domainOriginLineColor">@color/ap_charcoal</item>
+        <item name="rangeOriginLineColor">@color/ap_charcoal</item>
+        <item name="titleTextColor">@color/ap_black</item>
+        <item name="domainTitleTextColor">@color/ap_black</item>
+        <item name="rangeTitleTextColor">@color/ap_black</item>
+        <item name="legendTextColor">@color/ap_black</item>
+    </style>
+
+</resources>
