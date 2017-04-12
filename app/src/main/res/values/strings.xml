@@ -4,4 +4,6 @@
     <string name="ble_not_supported">BLE not supported</string>
     <string name="ble_aviable">BLE aviable</string>
     <string name="beat">0ppm</string>
+    <string name="device_details">Device Info</string>
+    <string name="received_data">Received data</string>
 </resources>
