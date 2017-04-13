@@ -3,11 +3,7 @@ package com.github.ypicoleal.heartsender;
 import android.annotation.TargetApi;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
-import android.bluetooth.BluetoothGattCharacteristic;
-import android.bluetooth.BluetoothGattDescriptor;
-import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
@@ -15,7 +11,6 @@ import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Color;
 import android.graphics.Paint;
 import android.os.Build;
 import android.os.Bundle;
@@ -40,29 +35,18 @@ import com.androidplot.xy.BoundaryMode;
 import com.androidplot.xy.XYPlot;
 import com.androidplot.xy.XYSeries;
 import com.github.javiersantos.materialstyleddialogs.MaterialStyledDialog;
-import com.github.mikephil.charting.components.YAxis;
-import com.github.mikephil.charting.data.Entry;
-import com.github.mikephil.charting.data.LineDataSet;
-import com.github.mikephil.charting.highlight.Highlight;
-import com.github.mikephil.charting.listener.OnChartValueSelectedListener;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.Locale;
 
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
-public class MainActivity extends AppCompatActivity implements OnChartValueSelectedListener, DevicesAdapter.ListItemClickListener {
+public class MainActivity extends AppCompatActivity implements DevicesAdapter.ListItemClickListener, HeartGattCallback.OnDeviceCallback {
 
     private static final int REQUEST_ENABLE_BT = 1;
     // Stops scanning after 10 seconds.
     private static final long SCAN_PERIOD = 10000;
-    private static final int STATUS_CONNECTING = 1;
-    private static final int STATUS_DISCOVERING = 2;
-    private static final int STATUS_CONNECTED = 3;
-    private static final int STATUS_DISCONNECTED = 4;
-    private static final int BATTERY_READDING = -1;
-    private static final int BATTERY_UNKNOWN = -2;
+    ECGModel ecgSeries;
     private BluetoothAdapter mBluetoothAdapter;
     private ArrayList<BluetoothDevice> devices;
     private ArrayList<String> devicesName;
@@ -71,10 +55,7 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
     private MaterialStyledDialog devicesDialog;
     //private LineChart mChart;
     private TextView mCurrentValue;
-    private XYPlot plot;
-    private Redrawer redrawer;
     private BluetoothDevice device;
-
     private BluetoothAdapter.LeScanCallback mLeScanCallback = new BluetoothAdapter.LeScanCallback() {
         @Override
         public void onLeScan(final BluetoothDevice device, int rssi,
@@ -105,128 +86,7 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
             Toast.makeText(MainActivity.this, "error: " + String.valueOf(errorCode), Toast.LENGTH_LONG).show();
         }
     };
-    private BluetoothGattCallback gattCallBack = new BluetoothGattCallback() {
-        final UUID HEART_RATE = UUID.fromString("00002A37-0000-1000-8000-00805f9b34fb");
-        final UUID BODY_SENSOR = UUID.fromString("00002A38-0000-1000-8000-00805f9b34fb");
-        final UUID BATTERY_LEVEL = UUID.fromString("00002A19-0000-1000-8000-00805f9b34fb");
-
-        void enableNotifications(BluetoothGatt gatt) {
-            Log.i("gatt", "enableNotifications");
-
-            gatt.readRemoteRssi();
-            List<BluetoothGattService> services = gatt.getServices();
-            for (BluetoothGattService service : services) {
-                Log.i("gatt", "Service UUID: " + service.getUuid());
-                List<BluetoothGattCharacteristic> characteristics = service.getCharacteristics();
-                for (BluetoothGattCharacteristic characteristic : characteristics) {
-                    Log.i("gatt", "Characteristic UUID: " + characteristic.getUuid());
-                    if (characteristic.getUuid().compareTo(HEART_RATE) == 0 || characteristic.getUuid().compareTo(BATTERY_LEVEL) == 0) {
-                        Log.i("gatt", "you are the chosen one");
-                        gatt.setCharacteristicNotification(characteristic, true);
-                        gatt.readCharacteristic(characteristic);
-                        setBatteryLevel(BATTERY_READDING);
-                    } else if (characteristic.getUuid().compareTo(BODY_SENSOR) == 0) {
-                        gatt.readCharacteristic(characteristic);
-                    }
-                    //
-                }
-            }
-        }
-
-        @Override
-        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-            super.onConnectionStateChange(gatt, status, newState);
-            Log.i("gatt", "Status change: " + status + " " + newState);
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                gatt.discoverServices();
-                changeStatusDevice(STATUS_DISCOVERING);
-            } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
-                changeStatusDevice(STATUS_DISCONNECTED);
-            }
-        }
-
-        @Override
-        public void onServicesDiscovered(BluetoothGatt gatt, int status) {
-            super.onServicesDiscovered(gatt, status);
-            Log.w("Gatt", "onServicesDiscovered received: " + status);
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                enableNotifications(gatt);
-                changeStatusDevice(STATUS_CONNECTED);
-            } else {
-                Log.w("Gatt", "error onServicesDiscovered received: " + status);
-            }
-        }
-
-        @Override
-        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            super.onCharacteristicRead(gatt, characteristic, status);
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                byte[] characteristicValue = characteristic.getValue();
-                for (byte singleByte : characteristicValue) {
-                    Log.i("gatt", "onCharacteristicWrite: " + singleByte + " length: " + characteristicValue.length);
-                }
-                if (characteristic.getUuid().compareTo(HEART_RATE) == 0) {
-                    addEntry(characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 0));
-                } else if (characteristic.getUuid().compareTo(BATTERY_LEVEL) == 0) {
-                    setBatteryLevel(characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 0));
-                } else {
-                    Log.i("gatt", "sensor location: " + characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 0) + " length: " + characteristicValue.length);
-                    setSensorIcon(characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 0));
-                }
-
-            }
-        }
-
-        @Override
-        public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            super.onCharacteristicWrite(gatt, characteristic, status);
-            Log.i("gatt", "onCharacteristicWrite status: " + status);
-        }
-
-        @Override
-        public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) {
-            super.onCharacteristicChanged(gatt, characteristic);
-            byte[] characteristicValue = characteristic.getValue();
-            for (byte singleByte : characteristicValue) {
-                Log.i("gatt", "single byte: " + singleByte + " length: " + characteristicValue.length);
-            }
-            if (characteristic.getUuid().compareTo(HEART_RATE) == 0) {
-                addEntry(characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 1));
-            } else if (characteristic.getUuid().compareTo(BATTERY_LEVEL) == 0) {
-                setBatteryLevel(characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 0));
-            }
-        }
-
-        @Override
-        public void onDescriptorRead(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-            super.onDescriptorRead(gatt, descriptor, status);
-            Log.i("gatt", "onDescriptorRead: ");
-        }
-
-        @Override
-        public void onDescriptorWrite(BluetoothGatt gatt, BluetoothGattDescriptor descriptor, int status) {
-            super.onDescriptorWrite(gatt, descriptor, status);
-            Log.i("gatt", "onDescriptorWrite: ");
-        }
-
-        @Override
-        public void onReliableWriteCompleted(BluetoothGatt gatt, int status) {
-            super.onReliableWriteCompleted(gatt, status);
-            Log.i("gatt", "onDescriptorWrite: ");
-        }
-
-        @Override
-        public void onReadRemoteRssi(BluetoothGatt gatt, int rssi, int status) {
-            super.onReadRemoteRssi(gatt, rssi, status);
-            Log.i("gatt", "onReadRemoteRssi: ");
-        }
-
-        @Override
-        public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
-            super.onMtuChanged(gatt, mtu, status);
-            Log.i("gatt", "onMtuChanged: ");
-        }
-    };
+    private BluetoothGattCallback gattCallBack = new HeartGattCallback(this);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -279,9 +139,9 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
 
     void setChart() {
         mCurrentValue = (TextView) findViewById(R.id.current_value);
-        plot = (XYPlot) findViewById(R.id.plot);
+        XYPlot plot = (XYPlot) findViewById(R.id.plot);
 
-        ECGModel ecgSeries = new ECGModel(2000, 200);
+        ecgSeries = new ECGModel(2000, 200);
 
         // add a new series' to the xyplot:
         MyFadeFormatter formatter = new MyFadeFormatter(500);
@@ -297,101 +157,57 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
         ecgSeries.start(new WeakReference<>(plot.getRenderer(AdvancedLineAndPointRenderer.class)));
 
         // set a redraw rate of 30hz and start immediately:
-        redrawer = new Redrawer(plot, 30, true);
-        /*mChart = (LineChart) findViewById(R.id.chart1);
-        mChart.setOnChartValueSelectedListener(this);
-        mChart.setDrawGridBackground(false);
-        mChart.getDescription().setEnabled(false);
+        new Redrawer(plot, 30, true);
 
-        // add an empty data object
-        mChart.setData(new LineData());
-//        mChart.getXAxis().setDrawLabels(false);
-//        mChart.getXAxis().setDrawGridLines(false);
-
-        mChart.invalidate();*/
     }
 
     public void tryReconnect(View view) {
         device.connectGatt(this, false, gattCallBack);
         devicesDialog.dismiss();
-        changeStatusDevice(STATUS_CONNECTING);
-        updateDeviceName();
+        setDeviceStatus(HeartGattCallback.STATUS_CONNECTING);
+        setDeviceName();
+        view.setEnabled(false);
     }
 
-    private void addEntry(final float yValue) {
+    private void setHeartRate(final float yValue) {
 
-        /*final LineData data = mChart.getData();
-
-        ILineDataSet set = data.getDataSetByIndex(0);
-        // set.addEntry(...); // can be called as well
-
-        if (set == null) {
-            set = createSet();
-            data.addDataSet(set);
-        }
-
-        MainActivity.this.runOnUiThread(new Runnable() {
+        runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 mCurrentValue.setText(String.format(Locale.US, "%.1f ppm", yValue));
-
-                data.addEntry(new Entry(data.getDataSetByIndex(0).getEntryCount(), yValue), 0);
-                data.notifyDataChanged();
-
-                // let the chart know it's data has changed
-                mChart.notifyDataSetChanged();
-
-                mChart.setVisibleXRangeMaximum(6);
-                //mChart.setVisibleYRangeMaximum(15, AxisDependency.LEFT);
-//
-//            // this automatically refreshes the chart (calls invalidate())
-                mChart.moveViewTo(data.getEntryCount() - 7, 50f, YAxis.AxisDependency.LEFT);
+                ecgSeries.addValue(yValue);
             }
-        });*/
+        });
     }
 
-    private LineDataSet createSet() {
-
-        LineDataSet set = new LineDataSet(null, "DataSet 1");
-        set.setLineWidth(2.5f);
-        set.setCircleRadius(4.5f);
-        set.setColor(Color.rgb(240, 99, 99));
-        set.setCircleColor(Color.rgb(240, 99, 99));
-        set.setHighLightColor(Color.rgb(190, 190, 190));
-        set.setAxisDependency(YAxis.AxisDependency.LEFT);
-        set.setValueTextSize(10f);
-
-        return set;
-    }
-
-    void setSensorIcon(final int sensor_location) {
+    void setSensorLocation(final int sensorLocation) {
         MainActivity.this.runOnUiThread(new Runnable() {
 
             @Override
             public void run() {
-                ImageView sensor_icon = (ImageView) findViewById(R.id.sensor_icon);
-                TextView sensorLocation = (TextView) findViewById(R.id.sensor_location);
-                if (sensor_location == 0) {
-                    sensor_icon.setImageResource(R.drawable.ic_favorite);
-                    sensorLocation.setText(R.string.sensor_other);
-                } else if (sensor_location == 1) {
-                    sensor_icon.setImageResource(R.drawable.ic_chest);
-                    sensorLocation.setText(R.string.sensor_chest);
-                } else if (sensor_location == 2) {
-                    sensor_icon.setImageResource(R.drawable.ic_wrist);
-                    sensorLocation.setText(R.string.sensor_wrist);
-                } else if (sensor_location == 3) {
-                    sensor_icon.setImageResource(R.drawable.ic_finger);
-                    sensorLocation.setText(R.string.sensor_finger);
-                } else if (sensor_location == 4) {
-                    sensor_icon.setImageResource(R.drawable.ic_hand);
-                    sensorLocation.setText(R.string.sensor_hand);
-                } else if (sensor_location == 5) {
-                    sensor_icon.setImageResource(R.drawable.ic_ear);
-                    sensorLocation.setText(R.string.sensor_ear);
-                } else if (sensor_location == 6) {
-                    sensor_icon.setImageResource(R.drawable.ic_foot);
-                    sensorLocation.setText(R.string.sensor_foot);
+                ImageView sensorIcon = (ImageView) findViewById(R.id.sensor_icon);
+                TextView sensorLocationTV = (TextView) findViewById(R.id.sensor_location);
+                if (sensorLocation == 0) {
+                    sensorIcon.setImageResource(R.drawable.ic_favorite);
+                    sensorLocationTV.setText(R.string.sensor_other);
+                } else if (sensorLocation == 1) {
+                    sensorIcon.setImageResource(R.drawable.ic_chest);
+                    sensorLocationTV.setText(R.string.sensor_chest);
+                } else if (sensorLocation == 2) {
+                    sensorIcon.setImageResource(R.drawable.ic_wrist);
+                    sensorLocationTV.setText(R.string.sensor_wrist);
+                } else if (sensorLocation == 3) {
+                    sensorIcon.setImageResource(R.drawable.ic_finger);
+                    sensorLocationTV.setText(R.string.sensor_finger);
+                } else if (sensorLocation == 4) {
+                    sensorIcon.setImageResource(R.drawable.ic_hand);
+                    sensorLocationTV.setText(R.string.sensor_hand);
+                } else if (sensorLocation == 5) {
+                    sensorIcon.setImageResource(R.drawable.ic_ear);
+                    sensorLocationTV.setText(R.string.sensor_ear);
+                } else if (sensorLocation == 6) {
+                    sensorIcon.setImageResource(R.drawable.ic_foot);
+                    sensorLocationTV.setText(R.string.sensor_foot);
                 }
             }
         });
@@ -404,10 +220,10 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                if (batteryLevel == BATTERY_READDING) {
+                if (batteryLevel == HeartGattCallback.BATTERY_READDING) {
                     batteryStatus.setText(R.string.reading);
                     batteryIcon.setImageResource(R.drawable.ic_battery_unknown_white_24dp);
-                } else if (batteryLevel == BATTERY_UNKNOWN) {
+                } else if (batteryLevel == HeartGattCallback.BATTERY_UNKNOWN) {
                     batteryStatus.setText(R.string.unknown);
                     batteryIcon.setImageResource(R.drawable.ic_battery_unknown_white_24dp);
                 } else {
@@ -477,63 +293,72 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
     }
 
     @Override
-    public void onValueSelected(Entry e, Highlight h) {
-
-    }
-
-    @Override
-    public void onNothingSelected() {
-
-    }
-
-    @Override
     public void onListItemClick(int position) {
         device = devices.get(position);
         device.connectGatt(this, false, gattCallBack);
         devicesDialog.dismiss();
-        changeStatusDevice(STATUS_CONNECTING);
-        updateDeviceName();
+        setDeviceStatus(HeartGattCallback.STATUS_CONNECTING);
+        setDeviceName();
     }
 
-    private void updateDeviceName() {
+    private void setDeviceName() {
         TextView deviceName = (TextView) findViewById(R.id.device_name);
         deviceName.setText(device.getName());
     }
 
-    private void changeStatusDevice(final int statusConnecting) {
+    private void setDeviceStatus(final int deviceStatus) {
         runOnUiThread(new Runnable() {
 
             @Override
             public void run() {
-                TextView deviceStatus = (TextView) findViewById(R.id.device_status);
+                TextView deviceStatusTV = (TextView) findViewById(R.id.device_status);
                 ImageView deviceStatusIcon = (ImageView) findViewById(R.id.device_status_icon);
-                switch (statusConnecting) {
-                    case STATUS_CONNECTING:
-                        deviceStatus.setText(R.string.connecting_state);
+                switch (deviceStatus) {
+                    case HeartGattCallback.STATUS_CONNECTING:
+                        deviceStatusTV.setText(R.string.connecting_state);
                         deviceStatusIcon.setImageResource(R.drawable.ic_bluetooth_connecting_black_24dp);
                         break;
-                    case STATUS_DISCOVERING:
-                        deviceStatus.setText(R.string.status_discovering);
+                    case HeartGattCallback.STATUS_DISCOVERING:
+                        deviceStatusTV.setText(R.string.status_discovering);
                         deviceStatusIcon.setImageResource(R.drawable.ic_settings_bluetooth_white_24dp);
                         break;
-                    case STATUS_CONNECTED:
-                        deviceStatus.setText(R.string.status_connected);
+                    case HeartGattCallback.STATUS_CONNECTED:
+                        deviceStatusTV.setText(R.string.status_connected);
                         deviceStatusIcon.setImageResource(R.drawable.ic_bluetooth_connected_black_24dp);
                         break;
-                    case STATUS_DISCONNECTED:
-                        deviceStatus.setText(R.string.status_disconected);
+                    case HeartGattCallback.STATUS_DISCONNECTED:
+                        deviceStatusTV.setText(R.string.status_disconected);
                         deviceStatusIcon.setImageResource(R.drawable.ic_bluetooth_disabled_black_24dp);
-                        setBatteryLevel(BATTERY_UNKNOWN);
                         Button recconect = (Button) findViewById(R.id.reconnect_btn);
                         recconect.setEnabled(true);
                         break;
                     default:
-                        deviceStatus.setText(R.string.unknown);
+                        deviceStatusTV.setText(R.string.unknown);
                         deviceStatusIcon.setImageResource(R.drawable.ic_bluetooth_white_24dp);
                         break;
                 }
             }
         });
+    }
+
+    @Override
+    public void onBatteryLevelChange(int batteryLevel) {
+        setBatteryLevel(batteryLevel);
+    }
+
+    @Override
+    public void onDeviceStatusChange(int status) {
+        setDeviceStatus(status);
+    }
+
+    @Override
+    public void onHeartRateChange(int heartRate) {
+        setHeartRate(heartRate);
+    }
+
+    @Override
+    public void onSensorLocationChange(int sensorLocation) {
+        setSensorLocation(sensorLocation);
     }
 
     public static class MyFadeFormatter extends AdvancedLineAndPointRenderer.Formatter {
@@ -570,10 +395,6 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
     public static class ECGModel implements XYSeries {
 
         private final Number[] data;
-        private final long delayMs;
-        private final int blipInteral;
-        private final Thread thread;
-        private boolean keepRunning;
         private int latestIndex;
 
         private WeakReference<AdvancedLineAndPointRenderer> rendererRef;
@@ -587,56 +408,28 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
             for (int i = 0; i < data.length; i++) {
                 data[i] = 0;
             }
+        }
 
-            // translate hz into delay (ms):
-            delayMs = 1000 / updateFreqHz;
+        public void addValue(float value) {
+            if (latestIndex >= data.length) {
+                latestIndex = 0;
+            }
 
-            // add 7 "blips" into the signal:
-            blipInteral = size / 7;
+            Log.i("data", latestIndex + " " + value);
 
-            thread = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        while (keepRunning) {
-                            if (latestIndex >= data.length) {
-                                latestIndex = 0;
-                            }
+            data[latestIndex] = value;
 
-                            // generate some random data:
-                            if (latestIndex % blipInteral == 0) {
-                                // insert a "blip" to simulate a heartbeat:
-                                data[latestIndex] = (Math.random() * 10) + 3;
-                            } else {
-                                // insert a random sample:
-                                data[latestIndex] = Math.random() * 2;
-                            }
+            if (latestIndex < data.length - 1) {
+                // null out the point immediately following i, to disable
+                // connecting i and i+1 with a line:
+                data[latestIndex + 1] = null;
+            }
 
-                            if (latestIndex < data.length - 1) {
-                                // null out the point immediately following i, to disable
-                                // connecting i and i+1 with a line:
-                                data[latestIndex + 1] = null;
-                            }
-
-                            if (rendererRef.get() != null) {
-                                rendererRef.get().setLatestIndex(latestIndex);
-                                Thread.sleep(delayMs);
-                            } else {
-                                keepRunning = false;
-                            }
-                            latestIndex++;
-                        }
-                    } catch (InterruptedException e) {
-                        keepRunning = false;
-                    }
-                }
-            });
+            latestIndex++;
         }
 
         public void start(final WeakReference<AdvancedLineAndPointRenderer> rendererRef) {
             this.rendererRef = rendererRef;
-            keepRunning = true;
-            thread.start();
         }
 
         @Override
