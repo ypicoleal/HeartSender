@@ -6,4 +6,19 @@
     <string name="beat">0ppm</string>
     <string name="device_details">Device Info</string>
     <string name="received_data">Received data</string>
+    <string name="connecting_state">Connecting…</string>
+    <string name="unknown">Unknown</string>
+    <string name="status_discovering">Discovering Services…</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_disconected">Disconnected</string>
+    <string name="reading">Reading…</string>
+    <string name="reconnect">Reconnect</string>
+    <string name="body_sensor_location">Body Sensor Location:</string>
+    <string name="sensor_other">Other</string>
+    <string name="sensor_chest">Chest</string>
+    <string name="sensor_wrist">Wrist</string>
+    <string name="sensor_finger">Finger</string>
+    <string name="sensor_hand">Hand</string>
+    <string name="sensor_ear">Ear Lobe</string>
+    <string name="sensor_foot">Foot</string>
 </resources>

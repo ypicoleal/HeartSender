@@ -28,6 +28,7 @@ import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -56,6 +57,12 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
     private static final int REQUEST_ENABLE_BT = 1;
     // Stops scanning after 10 seconds.
     private static final long SCAN_PERIOD = 10000;
+    private static final int STATUS_CONNECTING = 1;
+    private static final int STATUS_DISCOVERING = 2;
+    private static final int STATUS_CONNECTED = 3;
+    private static final int STATUS_DISCONNECTED = 4;
+    private static final int BATTERY_READDING = -1;
+    private static final int BATTERY_UNKNOWN = -2;
     private BluetoothAdapter mBluetoothAdapter;
     private ArrayList<BluetoothDevice> devices;
     private ArrayList<String> devicesName;
@@ -66,6 +73,8 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
     private TextView mCurrentValue;
     private XYPlot plot;
     private Redrawer redrawer;
+    private BluetoothDevice device;
+
     private BluetoothAdapter.LeScanCallback mLeScanCallback = new BluetoothAdapter.LeScanCallback() {
         @Override
         public void onLeScan(final BluetoothDevice device, int rssi,
@@ -99,6 +108,7 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
     private BluetoothGattCallback gattCallBack = new BluetoothGattCallback() {
         final UUID HEART_RATE = UUID.fromString("00002A37-0000-1000-8000-00805f9b34fb");
         final UUID BODY_SENSOR = UUID.fromString("00002A38-0000-1000-8000-00805f9b34fb");
+        final UUID BATTERY_LEVEL = UUID.fromString("00002A19-0000-1000-8000-00805f9b34fb");
 
         void enableNotifications(BluetoothGatt gatt) {
             Log.i("gatt", "enableNotifications");
@@ -110,10 +120,11 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
                 List<BluetoothGattCharacteristic> characteristics = service.getCharacteristics();
                 for (BluetoothGattCharacteristic characteristic : characteristics) {
                     Log.i("gatt", "Characteristic UUID: " + characteristic.getUuid());
-                    if (characteristic.getUuid().compareTo(HEART_RATE) == 0) {
+                    if (characteristic.getUuid().compareTo(HEART_RATE) == 0 || characteristic.getUuid().compareTo(BATTERY_LEVEL) == 0) {
                         Log.i("gatt", "you are the chosen one");
                         gatt.setCharacteristicNotification(characteristic, true);
                         gatt.readCharacteristic(characteristic);
+                        setBatteryLevel(BATTERY_READDING);
                     } else if (characteristic.getUuid().compareTo(BODY_SENSOR) == 0) {
                         gatt.readCharacteristic(characteristic);
                     }
@@ -128,8 +139,9 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
             Log.i("gatt", "Status change: " + status + " " + newState);
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 gatt.discoverServices();
-            } else if (status == BluetoothGatt.GATT_CONNECTION_CONGESTED) {
-                Log.i("gatt", "Error: " + status + " " + newState);
+                changeStatusDevice(STATUS_DISCOVERING);
+            } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
+                changeStatusDevice(STATUS_DISCONNECTED);
             }
         }
 
@@ -139,6 +151,7 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
             Log.w("Gatt", "onServicesDiscovered received: " + status);
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 enableNotifications(gatt);
+                changeStatusDevice(STATUS_CONNECTED);
             } else {
                 Log.w("Gatt", "error onServicesDiscovered received: " + status);
             }
@@ -154,6 +167,8 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
                 }
                 if (characteristic.getUuid().compareTo(HEART_RATE) == 0) {
                     addEntry(characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 0));
+                } else if (characteristic.getUuid().compareTo(BATTERY_LEVEL) == 0) {
+                    setBatteryLevel(characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 0));
                 } else {
                     Log.i("gatt", "sensor location: " + characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 0) + " length: " + characteristicValue.length);
                     setSensorIcon(characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 0));
@@ -175,7 +190,11 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
             for (byte singleByte : characteristicValue) {
                 Log.i("gatt", "single byte: " + singleByte + " length: " + characteristicValue.length);
             }
-            addEntry(characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 1));
+            if (characteristic.getUuid().compareTo(HEART_RATE) == 0) {
+                addEntry(characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 1));
+            } else if (characteristic.getUuid().compareTo(BATTERY_LEVEL) == 0) {
+                setBatteryLevel(characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_SINT8, 0));
+            }
         }
 
         @Override
@@ -292,6 +311,13 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
         mChart.invalidate();*/
     }
 
+    public void tryReconnect(View view) {
+        device.connectGatt(this, false, gattCallBack);
+        devicesDialog.dismiss();
+        changeStatusDevice(STATUS_CONNECTING);
+        updateDeviceName();
+    }
+
     private void addEntry(final float yValue) {
 
         /*final LineData data = mChart.getData();
@@ -344,18 +370,67 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
             @Override
             public void run() {
                 ImageView sensor_icon = (ImageView) findViewById(R.id.sensor_icon);
+                TextView sensorLocation = (TextView) findViewById(R.id.sensor_location);
                 if (sensor_location == 0) {
                     sensor_icon.setImageResource(R.drawable.ic_favorite);
+                    sensorLocation.setText(R.string.sensor_other);
                 } else if (sensor_location == 1) {
                     sensor_icon.setImageResource(R.drawable.ic_chest);
+                    sensorLocation.setText(R.string.sensor_chest);
                 } else if (sensor_location == 2) {
                     sensor_icon.setImageResource(R.drawable.ic_wrist);
+                    sensorLocation.setText(R.string.sensor_wrist);
                 } else if (sensor_location == 3) {
                     sensor_icon.setImageResource(R.drawable.ic_finger);
+                    sensorLocation.setText(R.string.sensor_finger);
                 } else if (sensor_location == 4) {
                     sensor_icon.setImageResource(R.drawable.ic_hand);
+                    sensorLocation.setText(R.string.sensor_hand);
                 } else if (sensor_location == 5) {
                     sensor_icon.setImageResource(R.drawable.ic_ear);
+                    sensorLocation.setText(R.string.sensor_ear);
+                } else if (sensor_location == 6) {
+                    sensor_icon.setImageResource(R.drawable.ic_foot);
+                    sensorLocation.setText(R.string.sensor_foot);
+                }
+            }
+        });
+    }
+
+    void setBatteryLevel(final int batteryLevel) {
+        Log.i("Battery level", "" + batteryLevel);
+        final TextView batteryStatus = (TextView) findViewById(R.id.batery_status);
+        final ImageView batteryIcon = (ImageView) findViewById(R.id.batery_status_icon);
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (batteryLevel == BATTERY_READDING) {
+                    batteryStatus.setText(R.string.reading);
+                    batteryIcon.setImageResource(R.drawable.ic_battery_unknown_white_24dp);
+                } else if (batteryLevel == BATTERY_UNKNOWN) {
+                    batteryStatus.setText(R.string.unknown);
+                    batteryIcon.setImageResource(R.drawable.ic_battery_unknown_white_24dp);
+                } else {
+                    batteryStatus.setText(batteryLevel + "%");
+                    int icon;
+                    if (batteryLevel < 20) {
+                        icon = R.drawable.ic_battery_alert_black_24dp;
+                    } else if (batteryLevel < 30) {
+                        icon = R.drawable.ic_battery_20_black_24dp;
+                    } else if (batteryLevel < 50) {
+                        icon = R.drawable.ic_battery_30_black_24dp;
+                    } else if (batteryLevel < 60) {
+                        icon = R.drawable.ic_battery_50_black_24dp;
+                    } else if (batteryLevel < 80) {
+                        icon = R.drawable.ic_battery_60_black_24dp;
+                    } else if (batteryLevel < 90) {
+                        icon = R.drawable.ic_battery_80_black_24dp;
+                    } else if (batteryLevel < 100) {
+                        icon = R.drawable.ic_battery_90_black_24dp;
+                    } else {
+                        icon = R.drawable.ic_battery_full_black_24dp;
+                    }
+                    batteryIcon.setImageResource(icon);
                 }
             }
         });
@@ -413,9 +488,52 @@ public class MainActivity extends AppCompatActivity implements OnChartValueSelec
 
     @Override
     public void onListItemClick(int position) {
-        BluetoothDevice device = devices.get(position);
+        device = devices.get(position);
         device.connectGatt(this, false, gattCallBack);
         devicesDialog.dismiss();
+        changeStatusDevice(STATUS_CONNECTING);
+        updateDeviceName();
+    }
+
+    private void updateDeviceName() {
+        TextView deviceName = (TextView) findViewById(R.id.device_name);
+        deviceName.setText(device.getName());
+    }
+
+    private void changeStatusDevice(final int statusConnecting) {
+        runOnUiThread(new Runnable() {
+
+            @Override
+            public void run() {
+                TextView deviceStatus = (TextView) findViewById(R.id.device_status);
+                ImageView deviceStatusIcon = (ImageView) findViewById(R.id.device_status_icon);
+                switch (statusConnecting) {
+                    case STATUS_CONNECTING:
+                        deviceStatus.setText(R.string.connecting_state);
+                        deviceStatusIcon.setImageResource(R.drawable.ic_bluetooth_connecting_black_24dp);
+                        break;
+                    case STATUS_DISCOVERING:
+                        deviceStatus.setText(R.string.status_discovering);
+                        deviceStatusIcon.setImageResource(R.drawable.ic_settings_bluetooth_white_24dp);
+                        break;
+                    case STATUS_CONNECTED:
+                        deviceStatus.setText(R.string.status_connected);
+                        deviceStatusIcon.setImageResource(R.drawable.ic_bluetooth_connected_black_24dp);
+                        break;
+                    case STATUS_DISCONNECTED:
+                        deviceStatus.setText(R.string.status_disconected);
+                        deviceStatusIcon.setImageResource(R.drawable.ic_bluetooth_disabled_black_24dp);
+                        setBatteryLevel(BATTERY_UNKNOWN);
+                        Button recconect = (Button) findViewById(R.id.reconnect_btn);
+                        recconect.setEnabled(true);
+                        break;
+                    default:
+                        deviceStatus.setText(R.string.unknown);
+                        deviceStatusIcon.setImageResource(R.drawable.ic_bluetooth_white_24dp);
+                        break;
+                }
+            }
+        });
     }
 
     public static class MyFadeFormatter extends AdvancedLineAndPointRenderer.Formatter {

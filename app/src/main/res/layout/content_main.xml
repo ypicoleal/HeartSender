@@ -44,7 +44,7 @@
                     android:layout_height="wrap_content"
                     android:layout_centerVertical="true"
                     android:layout_marginStart="16dp"
-                    android:src="@drawable/ic_bluetooth_white_24dp"
+                    android:src="@drawable/ic_router_black_24dp"
                     android:tint="@color/colorPrimary" />
             </RelativeLayout>
 
@@ -71,11 +71,12 @@
                     android:layout_height="56dp">
 
                     <ImageView
+                        android:id="@+id/device_status_icon"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_centerVertical="true"
                         android:layout_marginStart="16dp"
-                        android:src="@drawable/ic_settings_bluetooth_white_24dp"
+                        android:src="@drawable/ic_bluetooth_white_24dp"
                         android:tint="@color/colorPrimary" />
                 </RelativeLayout>
 
@@ -85,7 +86,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
-                    android:text="Unknown" />
+                    android:text="@string/unknown" />
             </LinearLayout>
 
             <LinearLayout
@@ -98,6 +99,7 @@
                     android:layout_height="56dp">
 
                     <ImageView
+                        android:id="@+id/batery_status_icon"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_centerVertical="true"
@@ -112,7 +114,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
-                    android:text="Unknown" />
+                    android:text="@string/unknown" />
             </LinearLayout>
         </LinearLayout>
 
@@ -139,23 +141,26 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:text="Body Sensor Location: " />
+                android:text="@string/body_sensor_location" />
 
             <TextView
+                android:id="@+id/sensor_location"
                 style="@style/Base.TextAppearance.AppCompat.Body1"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:text="Unknown" />
+                android:text="@string/unknown" />
         </LinearLayout>
 
         <Button
+            android:id="@+id/reconnect_btn"
             style="@style/Widget.AppCompat.Button.Borderless.Colored"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="end"
             android:enabled="false"
-            android:text="Reconnect" />
+            android:onClick="tryReconnect"
+            android:text="@string/reconnect" />
 
         <View
             android:id="@+id/view"
