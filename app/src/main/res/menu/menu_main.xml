@@ -3,8 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context="com.github.ypicoleal.heartsender.MainActivity">
     <item
-        android:id="@+id/action_settings"
+        android:id="@+id/action_search"
+        android:icon="@drawable/ic_bluetooth_white_24dp"
         android:orderInCategory="100"
-        android:title="@string/action_settings"
-        app:showAsAction="never" />
+        android:title="Search BLE"
+        app:showAsAction="ifRoom" />
 </menu>

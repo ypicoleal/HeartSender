@@ -11,17 +11,18 @@ import android.bluetooth.le.ScanResult;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Paint;
+import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
@@ -29,14 +30,16 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.androidplot.util.Redrawer;
-import com.androidplot.xy.AdvancedLineAndPointRenderer;
-import com.androidplot.xy.BoundaryMode;
-import com.androidplot.xy.XYPlot;
-import com.androidplot.xy.XYSeries;
 import com.github.javiersantos.materialstyleddialogs.MaterialStyledDialog;
+import com.github.mikephil.charting.charts.LineChart;
+import com.github.mikephil.charting.components.YAxis;
+import com.github.mikephil.charting.data.Entry;
+import com.github.mikephil.charting.data.LineData;
+import com.github.mikephil.charting.data.LineDataSet;
+import com.github.mikephil.charting.highlight.Highlight;
+import com.github.mikephil.charting.interfaces.datasets.ILineDataSet;
+import com.github.mikephil.charting.listener.OnChartValueSelectedListener;
 
-import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -46,7 +49,7 @@ public class MainActivity extends AppCompatActivity implements DevicesAdapter.Li
     private static final int REQUEST_ENABLE_BT = 1;
     // Stops scanning after 10 seconds.
     private static final long SCAN_PERIOD = 10000;
-    ECGModel ecgSeries;
+    private LineChart mChart;
     private BluetoothAdapter mBluetoothAdapter;
     private ArrayList<BluetoothDevice> devices;
     private ArrayList<String> devicesName;
@@ -110,54 +113,31 @@ public class MainActivity extends AppCompatActivity implements DevicesAdapter.Li
                 startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
             }
         }
-
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-
-                LayoutInflater inflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
-                View customView = inflater.inflate(R.layout.devices, null);
-
-                RecyclerView mDevicesRV = (RecyclerView) customView.findViewById(R.id.devices_rv);
-                RecyclerView.LayoutManager layoutManager = new LinearLayoutManager(MainActivity.this);
-                mDevicesRV.setLayoutManager(layoutManager);
-                mDevicesRV.setHasFixedSize(true);
-                mDevicesAdapter = new DevicesAdapter(MainActivity.this);
-                mDevicesRV.setAdapter(mDevicesAdapter);
-
-                mProgressBar = (ProgressBar) customView.findViewById(R.id.progress_bar);
-                devicesDialog = new MaterialStyledDialog.Builder(MainActivity.this)
-                        .setTitle("Dispositivos BLE")
-                        .setIcon(R.drawable.ic_bluetooth_white_24dp)
-                        .setCustomView(customView, 16, 16, 16, 0)
-                        .show();
-                scanLeDevice(true);
-            }
-        });
     }
 
     void setChart() {
         mCurrentValue = (TextView) findViewById(R.id.current_value);
-        XYPlot plot = (XYPlot) findViewById(R.id.plot);
+        mChart = (LineChart) findViewById(R.id.chart1);
+        mChart.setOnChartValueSelectedListener(new OnChartValueSelectedListener() {
+            @Override
+            public void onValueSelected(Entry e, Highlight h) {
 
-        ecgSeries = new ECGModel(2000, 200);
+            }
 
-        // add a new series' to the xyplot:
-        MyFadeFormatter formatter = new MyFadeFormatter(500);
-        formatter.setLegendIconEnabled(false);
-        plot.addSeries(ecgSeries, formatter);
-        plot.setRangeBoundaries(0, 10, BoundaryMode.FIXED);
-        plot.setDomainBoundaries(0, 2000, BoundaryMode.FIXED);
+            @Override
+            public void onNothingSelected() {
 
-        // reduce the number of range labels
-        plot.setLinesPerRangeLabel(3);
+            }
+        });
+        mChart.setDrawGridBackground(false);
+        mChart.getDescription().setEnabled(false);
 
-        // start generating ecg data in the background:
-        ecgSeries.start(new WeakReference<>(plot.getRenderer(AdvancedLineAndPointRenderer.class)));
+        // add an empty data object
+        mChart.setData(new LineData());
+        mChart.getXAxis().setDrawLabels(false);
+        mChart.getXAxis().setDrawGridLines(false);
 
-        // set a redraw rate of 30hz and start immediately:
-        new Redrawer(plot, 30, true);
+        mChart.invalidate();
 
     }
 
@@ -174,10 +154,55 @@ public class MainActivity extends AppCompatActivity implements DevicesAdapter.Li
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                mCurrentValue.setText(String.format(Locale.US, "%.1f ppm", yValue));
-                ecgSeries.addValue(yValue);
+                if (yValue > 2) {
+                    mCurrentValue.setText(String.format(Locale.US, "%.1f ppm", yValue));
+                }
+                addEntry(yValue);
             }
         });
+    }
+
+    private void addEntry(float yValue) {
+
+        LineData data = mChart.getData();
+
+        ILineDataSet set = data.getDataSetByIndex(0);
+        // set.addEntry(...); // can be called as well
+
+        if (set == null) {
+            set = createSet();
+            data.addDataSet(set);
+        }
+
+        // choose a random dataSet
+        int randomDataSetIndex = (int) (Math.random() * data.getDataSetCount());
+
+        data.addEntry(new Entry(data.getDataSetByIndex(randomDataSetIndex).getEntryCount(), yValue), randomDataSetIndex);
+        data.notifyDataChanged();
+
+        // let the chart know it's data has changed
+        mChart.notifyDataSetChanged();
+
+        mChart.setVisibleXRangeMaximum(2000);
+        //mChart.setVisibleYRangeMaximum(15, AxisDependency.LEFT);
+//
+//            // this automatically refreshes the chart (calls invalidate())
+        mChart.moveViewTo(data.getEntryCount() - 7, 50f, YAxis.AxisDependency.LEFT);
+
+    }
+
+    private LineDataSet createSet() {
+
+        LineDataSet set = new LineDataSet(null, "DataSet 1");
+        set.setLineWidth(2.5f);
+        set.setCircleRadius(4.5f);
+        set.setColor(Color.rgb(240, 99, 99));
+        set.setCircleColor(Color.rgb(240, 99, 99));
+        set.setHighLightColor(Color.rgb(190, 190, 190));
+        set.setAxisDependency(YAxis.AxisDependency.LEFT);
+        set.setValueTextSize(10f);
+        set.setDrawCircles(false);
+        return set;
     }
 
     void setSensorLocation(final int sensorLocation) {
@@ -292,15 +317,6 @@ public class MainActivity extends AppCompatActivity implements DevicesAdapter.Li
         }
     }
 
-    @Override
-    public void onListItemClick(int position) {
-        device = devices.get(position);
-        device.connectGatt(this, false, gattCallBack);
-        devicesDialog.dismiss();
-        setDeviceStatus(HeartGattCallback.STATUS_CONNECTING);
-        setDeviceName();
-    }
-
     private void setDeviceName() {
         TextView deviceName = (TextView) findViewById(R.id.device_name);
         deviceName.setText(device.getName());
@@ -342,6 +358,15 @@ public class MainActivity extends AppCompatActivity implements DevicesAdapter.Li
     }
 
     @Override
+    public void onListItemClick(int position) {
+        device = devices.get(position);
+        device.connectGatt(this, false, gattCallBack);
+        devicesDialog.dismiss();
+        setDeviceStatus(HeartGattCallback.STATUS_CONNECTING);
+        setDeviceName();
+    }
+
+    @Override
     public void onBatteryLevelChange(int batteryLevel) {
         setBatteryLevel(batteryLevel);
     }
@@ -361,95 +386,41 @@ public class MainActivity extends AppCompatActivity implements DevicesAdapter.Li
         setSensorLocation(sensorLocation);
     }
 
-    public static class MyFadeFormatter extends AdvancedLineAndPointRenderer.Formatter {
-
-        private int trailSize;
-
-        public MyFadeFormatter(int trailSize) {
-            this.trailSize = trailSize;
-        }
-
-        @Override
-        public Paint getLinePaint(int thisIndex, int latestIndex, int seriesSize) {
-            // offset from the latest index:
-            int offset;
-            if (thisIndex > latestIndex) {
-                offset = latestIndex + (seriesSize - thisIndex);
-            } else {
-                offset = latestIndex - thisIndex;
-            }
-
-            float scale = 255f / trailSize;
-            int alpha = (int) (255 - (offset * scale));
-            getLinePaint().setAlpha(alpha > 0 ? alpha : 0);
-            return getLinePaint();
-        }
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+        return true;
     }
 
-    /**
-     * Primitive simulation of some kind of signal.  For this example,
-     * we'll pretend its an ecg.  This class represents the data as a circular buffer;
-     * data is added sequentially from left to right.  When the end of the buffer is reached,
-     * i is reset back to 0 and simulated sampling continues.
-     */
-    public static class ECGModel implements XYSeries {
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+        int id = item.getItemId();
 
-        private final Number[] data;
-        private int latestIndex;
+        //noinspection SimplifiableIfStatement
+        if (id == R.id.action_search) {
+            LayoutInflater inflater = (LayoutInflater) getSystemService(Context.LAYOUT_INFLATER_SERVICE);
+            View customView = inflater.inflate(R.layout.devices, null);
 
-        private WeakReference<AdvancedLineAndPointRenderer> rendererRef;
+            RecyclerView mDevicesRV = (RecyclerView) customView.findViewById(R.id.devices_rv);
+            RecyclerView.LayoutManager layoutManager = new LinearLayoutManager(MainActivity.this);
+            mDevicesRV.setLayoutManager(layoutManager);
+            mDevicesRV.setHasFixedSize(true);
+            mDevicesAdapter = new DevicesAdapter(MainActivity.this);
+            mDevicesRV.setAdapter(mDevicesAdapter);
 
-        /**
-         * @param size         Sample size contained within this model
-         * @param updateFreqHz Frequency at which new samples are added to the model
-         */
-        public ECGModel(int size, int updateFreqHz) {
-            data = new Number[size];
-            for (int i = 0; i < data.length; i++) {
-                data[i] = 0;
-            }
+            mProgressBar = (ProgressBar) customView.findViewById(R.id.progress_bar);
+            devicesDialog = new MaterialStyledDialog.Builder(MainActivity.this)
+                    .setTitle("Dispositivos BLE")
+                    .setIcon(R.drawable.ic_bluetooth_white_24dp)
+                    .setCustomView(customView, 16, 16, 16, 0)
+                    .show();
+            scanLeDevice(true);
+            return true;
         }
 
-        public void addValue(float value) {
-            if (latestIndex >= data.length) {
-                latestIndex = 0;
-            }
-
-            Log.i("data", latestIndex + " " + value);
-
-            data[latestIndex] = value;
-
-            if (latestIndex < data.length - 1) {
-                // null out the point immediately following i, to disable
-                // connecting i and i+1 with a line:
-                data[latestIndex + 1] = null;
-            }
-
-            latestIndex++;
-        }
-
-        public void start(final WeakReference<AdvancedLineAndPointRenderer> rendererRef) {
-            this.rendererRef = rendererRef;
-        }
-
-        @Override
-        public int size() {
-            return data.length;
-        }
-
-        @Override
-        public Number getX(int index) {
-            return index;
-        }
-
-        @Override
-        public Number getY(int index) {
-            return data[index];
-        }
-
-        @Override
-        public String getTitle() {
-            return "Signal";
-        }
+        return super.onOptionsItemSelected(item);
     }
 }

@@ -186,12 +186,10 @@
             android:paddingStart="16dp"
             android:text="@string/beat" />
 
-        <com.androidplot.xy.XYPlot
-            android:id="@+id/plot"
-            style="@style/APDefacto.Light"
+        <com.github.mikephil.charting.charts.LineChart
+            android:id="@+id/chart1"
             android:layout_width="match_parent"
-            android:layout_height="200dp"
-            app:renderMode="use_background_thread" />
+            android:layout_height="200dp" />
     </LinearLayout>
 </android.support.v4.widget.NestedScrollView>
 
